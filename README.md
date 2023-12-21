@@ -1,7 +1,7 @@
 # KScript
 KScript is a simple scripting language written in java.
 
-```
+```c++
 /*
 Define script schema
 */
@@ -30,7 +30,7 @@ main() {
 }
 ```
 
-```
+```c++
 :schema 1
 
 main() {
