@@ -1,5 +1,7 @@
 package es.karmadev.api.script.lang.imports.sys;
 
+import es.karmadev.api.script.body.Import;
+import es.karmadev.api.script.body.Variable;
 import es.karmadev.api.script.body.func.Function;
 
 /**
@@ -7,7 +9,27 @@ import es.karmadev.api.script.body.func.Function;
  */
 public class PrintLn implements Function {
 
-    private final static Print print = new Print();
+    private final System imp;
+
+    /**
+     * Initialize the function
+     *
+     * @param imp the function import
+     */
+    public PrintLn(final System imp) {
+        this.imp = imp;
+    }
+
+    /**
+     * Get the import the function
+     * pertains to
+     *
+     * @return the function import
+     */
+    @Override
+    public Import getImport() {
+        return imp;
+    }
 
     /**
      * Get the function name
@@ -52,15 +74,15 @@ public class PrintLn implements Function {
      * @return the method result
      */
     @Override
-    public Object execute(final Object... parameters) {
+    public Object execute(final Variable... parameters) {
         if (parameters.length == 0) {
             java.lang.System.out.println();
         }
 
-        Object[] p = new Object[parameters.length + 1];
+        Variable[] p = new Variable[parameters.length + 1];
         java.lang.System.arraycopy(parameters, 0, p, 0, parameters.length);
-        p[p.length - 1] = '\n';
+        p[p.length - 1] = Variable.wrap('\n', Character.class);
 
-        return print.execute(p);
+        return imp.print.execute(p);
     }
 }

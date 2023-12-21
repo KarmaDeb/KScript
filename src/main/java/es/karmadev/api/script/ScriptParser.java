@@ -43,7 +43,9 @@ public final class ScriptParser {
             "double",
             "bool",
             "is",
-            "type"
+            "type",
+            "this",
+            "echo"
     };
 
     private final static Pattern schemaPattern = Pattern.compile("^(this)?:schema(\\s)+(?<version>[0-9]+)$", Pattern.CASE_INSENSITIVE);
@@ -188,6 +190,17 @@ public final class ScriptParser {
                         currentParameters = groupContent(rawParams);
                     }
 
+                    boolean multi = false;
+                    for (String p : currentParameters) {
+                        if (multi) {
+                            throw new InvalidSyntaxException(str, line, "Multiple parameters modifier is only supported for one parameter");
+                        }
+
+                        if (p.endsWith("::")) {
+                            multi = true;
+                        }
+                    }
+
                     currentLevel++;
                 } else {
                     if (str.trim().endsWith("{")) {
@@ -226,7 +239,7 @@ public final class ScriptParser {
         }
     }
 
-    private String removeFirstSpaces(final String line) {
+    public static String removeFirstSpaces(final String line) {
         int lastIndex = 0;
 
         if (line.startsWith(" ")) {

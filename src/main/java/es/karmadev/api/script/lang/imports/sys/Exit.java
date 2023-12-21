@@ -1,16 +1,37 @@
 package es.karmadev.api.script.lang.imports.sys;
 
+import es.karmadev.api.script.body.Import;
+import es.karmadev.api.script.body.Variable;
 import es.karmadev.api.script.body.func.Function;
 import es.karmadev.api.script.exception.body.ScriptWorkException;
 import es.karmadev.api.script.lang.variables.ExitVoidReturn;
-import es.karmadev.api.script.lang.variables.VoidReturn;
 
 /**
  * println function for {@link System}
  */
 public class Exit implements Function {
 
-    private final static Print print = new Print();
+    private final System imp;
+
+    /**
+     * Initialize the function
+     *
+     * @param imp the function import
+     */
+    public Exit(final System imp) {
+        this.imp = imp;
+    }
+
+    /**
+     * Get the import the function
+     * pertains to
+     *
+     * @return the function import
+     */
+    @Override
+    public Import getImport() {
+        return imp;
+    }
 
     /**
      * Get the function name
@@ -55,15 +76,16 @@ public class Exit implements Function {
      * @return the method result
      */
     @Override
-    public Object execute(final Object... parameters) {
-        if (!(parameters[0] instanceof Number)) {
+    public Object execute(final Variable... parameters) {
+        Variable first = parameters[0];
+        if (!first.getType().equals(Number.class)) {
             throw new ScriptWorkException("Invalid parameter #1, expected number but got " + parameters[0]);
         }
 
-        int code = ((Number) parameters[0]).intValue();
-        parameters[0] = "Exiting program (" + code + ")." + (parameters.length > 1 ? " " : "");
+        int code = first.getValue(Number.class).intValue();
+        parameters[0] = Variable.wrap("Exiting program (" + code + ")." + (parameters.length > 1 ? " " : ""), String.class);
 
-        print.execute(parameters);
+        imp.exit.execute(parameters);
 
         return ExitVoidReturn.get();
     }

@@ -19,7 +19,7 @@ public class NullReference extends Variable {
     }
 
     private NullReference() throws VariableDefinitionException {
-        super("", true, FLAG_PRIVATE | FLAG_READONLY | FLAG_FINAL);
+        super("null", true, FLAG_PRIVATE & FLAG_READONLY & FLAG_FINAL, Object.class);
     }
 
     public static NullReference get() {

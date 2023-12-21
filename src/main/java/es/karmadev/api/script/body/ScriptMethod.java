@@ -6,6 +6,7 @@ import es.karmadev.api.script.exception.body.NoSuchDefException;
 import es.karmadev.api.script.exception.body.NoSuchImportException;
 import es.karmadev.api.script.exception.ScriptRuntimeException;
 import es.karmadev.api.script.exception.body.NoSuchInvokeException;
+import es.karmadev.api.script.exception.body.NoSuchMethodException;
 import es.karmadev.api.script.exception.body.ScriptWorkException;
 import es.karmadev.api.script.lang.NullReference;
 import es.karmadev.api.script.lang.variables.ExitVoidReturn;
@@ -24,6 +25,7 @@ import java.util.regex.Pattern;
 public class ScriptMethod {
 
     private final static Pattern methodCall = Pattern.compile("^(?<import>\\w+)#(?<function>.*)\\((?<parameters>.*)\\)$", Pattern.CASE_INSENSITIVE);
+    private final static Pattern selfMethodCall = Pattern.compile("^(this#)?(?<function>.*)\\((?<parameters>.*)\\)$", Pattern.CASE_INSENSITIVE);
 
     private final String name;
     private final String content;
@@ -94,6 +96,20 @@ public class ScriptMethod {
         Map<String, Variable> param = new HashMap<>();
         for (int i = 0; i < this.parameters.length; i++) {
             String key = this.parameters[i];
+            if (key.endsWith("::")) {
+                if (i < parameters.length) {
+                    Variable[] vars = new Variable[parameters.length - i];
+                    int wIndex = 0;
+                    for (int j = i; j < parameters.length; j++) {
+                        vars[wIndex++] = parameters[j];
+                    }
+
+                    param.put(key.substring(0, key.length() - 2), Variable.wrap(vars, Variable[].class));
+                }
+
+                i = this.parameters.length;
+            }
+
             Variable value = NullReference.get();
 
             if (i < parameters.length) {
@@ -103,64 +119,78 @@ public class ScriptMethod {
             param.put(key, value);
         }
 
+        param.put("this", Variable.wrap(body, ScriptBody.class));
+
         String[] data = content.split("\n");
         for (String line : data) {
             Matcher methodCallMath = methodCall.matcher(line);
-            if (methodCallMath.matches()) {
-                String impName = methodCallMath.group("import");
-                String funcName = methodCallMath.group("function");
+            Matcher selfMethodCallMath = selfMethodCall.matcher(line);
 
-                Import imp = body.getImport(impName);
-                if (imp == null) throw new ScriptWorkException(new NoSuchImportException(impName));
+            if (methodCallMath.matches() || selfMethodCallMath.matches()) {
+                String impName;
+                String funcName;
+                String rawContent;
+                if (methodCallMath.matches()) {
+                    impName = methodCallMath.group("import");
+                    funcName = methodCallMath.group("function");
+                    rawContent = methodCallMath.group("parameters");
+                } else {
+                    impName = null;
+                    funcName = selfMethodCallMath.group("function");
+                    rawContent = selfMethodCallMath.group("parameters");
+                }
 
-                String rawContent = methodCallMath.group("parameters");
                 String[] raw = ScriptParser.groupContent(rawContent);
-                Object[] content = new Object[raw.length];
-                System.arraycopy(raw, 0, content, 0, content.length);
-
-                Function function = imp.getFunction(funcName, content.length);
-                if (function == null) throw new ScriptWorkException(new NoSuchInvokeException(imp, funcName));
-
-                for (int i = 0; i < content.length; i++) {
-                    String word = (String) content[i];
-                    if (word.startsWith("\"") || word.startsWith("'")) {
-                        content[i] = word.substring(1, word.length() - 1);
-                        continue;
+                Variable[] content = new Variable[raw.length];
+                for (int i = 0; i < raw.length; i++) {
+                    String str = raw[i];
+                    if (str.endsWith("::")) {
+                        str = str.substring(0, str.length() - 2);
                     }
+                    content[i] = Variable.wrap(str, String.class);
+                }
 
-                    if (word.contains(",") || word.contains(".")) {
-                        try {
-                            double dValue = Double.parseDouble(word);
-                            content[i] = dValue;
-
-                            continue;
-                        } catch (NumberFormatException ignored) {
-                        }
-                    } else {
-                        try {
-                            long lValue = Long.parseLong(word);
-                            content[i] = lValue;
-
-                            continue;
-                        } catch (NumberFormatException ignored) {}
-                    }
-
-                    if (word.equals("true") || word.equals("false")) {
-                        content[i] = word.equals("true");
-                        continue;
-                    }
-
-                    Variable variable = param.get(word);
-                    if (variable == null) {
+                Import imp = null;
+                Function func = null;
+                if (impName != null) {
+                    if (!impName.equals("this")) {
+                    imp = body.getImport(impName);
+                    if (imp == null) {
                         throw new ScriptWorkException(
-                                new NoSuchDefException(imp, function, line, word)
+                                new NoSuchImportException(impName)
                         );
                     }
 
-                    content[i] = String.valueOf(variable.getValue());
+                    func = imp.getFunction(funcName, content.length);
+                    if (func == null) throw new ScriptWorkException(new NoSuchInvokeException(imp, funcName));
+                    }
+                } else {
+                    func = body.findFunction(funcName, content.length);
+                    if (func == null) {
+                        impName = "this";
+                    } else {
+                        imp = func.getImport();
+                        impName = func.getImport().getName();
+                    }
                 }
 
-                Object response = function.execute(content);
+                mapVariables(content, param, imp, func, line);
+
+                if (imp == null) {
+                    if (impName.equals("this")) {
+                        ScriptMethod method = body.getMethod(funcName, content.length);
+                        if (method == null) throw new ScriptWorkException(
+                                new NoSuchMethodException(funcName, content.length)
+                        );
+
+                        method.invoke(body, content);
+                        continue;
+                    }
+
+                    throw new ScriptWorkException(new NoSuchImportException(impName));
+                }
+
+                Object response = func.execute(content);
                 if (response instanceof ExitVoidReturn) {
                     return response;
                 }
@@ -179,8 +209,93 @@ public class ScriptMethod {
                 System.out.print("Exiting program (0).");
                 return ExitVoidReturn.get();
             }
+
+            if (line.startsWith("echo")) {
+                if (!line.contains(" ")) {
+                    System.out.print("");
+                    continue;
+                }
+
+                line = ScriptParser.removeFirstSpaces(line.substring(4));
+                if (!line.startsWith("[") && !line.endsWith("]")) {
+                    System.out.println(line);
+                } else {
+                    es.karmadev.api.script.lang.imports.sys.System
+                            sys = es.karmadev.api.script.lang.imports.sys.System.getImport();
+                    Function print = sys.getFunction("println", 0);
+
+                    String[] raw = ScriptParser.groupContent(line.substring(1, line.length() - 1));
+                    Variable[] content = new Variable[raw.length];
+                    for (int i = 0; i < raw.length; i++) {
+                        String str = raw[i];
+                        if (str.endsWith("::")) {
+                            str = str.substring(0, str.length() - 2);
+                        }
+                        content[i] = Variable.wrap(str, String.class);
+                    }
+
+                    mapVariables(content, param, null, null, line);
+                    print.execute(content);
+                }
+            }
         }
 
         return VoidReturn.get();
+    }
+
+    private void mapVariables(final Variable[] content, final Map<String, Variable> param,
+                              final Import imp, final Function func, final String line) {
+
+        for (int i = 0; i < content.length; i++) {
+            Variable var = content[i];
+            if (var.isNull()) {
+                content[i] = var;
+                continue;
+            }
+
+            String word = var.getValue(String.class);
+
+            if (word.startsWith("\"") || word.startsWith("'")) {
+                content[i] = Variable.wrap(word.substring(1, word.length() - 1), String.class);
+                continue;
+            }
+
+            if (word.contains(",") || word.contains(".")) {
+                try {
+                    double dValue = Double.parseDouble(word);
+                    content[i] = Variable.wrap(dValue, Number.class);
+
+                    continue;
+                } catch (NumberFormatException ignored) {
+                }
+            } else {
+                try {
+                    long lValue = Long.parseLong(word);
+                    content[i] = Variable.wrap(lValue, Number.class);
+
+                    continue;
+                } catch (NumberFormatException ignored) {}
+            }
+
+            if (word.equals("true") || word.equals("false")) {
+                content[i] = Variable.wrap(word.equals("true"), Boolean.class);
+                continue;
+            }
+
+            Variable variable = param.get(word);
+            if (variable == null) {
+                if (imp == null) {
+                    throw new ScriptWorkException(
+                            new NoSuchDefException(line, word)
+                    );
+                } else {
+                    throw new ScriptWorkException(
+                            new NoSuchDefException(imp, func, line, word)
+                    );
+                }
+            }
+
+            content[i] = variable;
+        }
     }
 }

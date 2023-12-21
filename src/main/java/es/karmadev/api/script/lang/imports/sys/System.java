@@ -12,10 +12,15 @@ import java.util.List;
 public class System extends Import {
 
     public final static System system = new System();
+
+    final Print print = new Print(this);
+    final PrintLn printLn = new PrintLn(this);
+    final Exit exit = new Exit(this);
+
     private final Function[] functions = {
-            new PrintLn(),
-            new Print(),
-            new Exit()
+        print,
+        printLn,
+        exit
     };
 
     /**

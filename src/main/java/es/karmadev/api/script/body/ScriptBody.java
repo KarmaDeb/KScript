@@ -1,5 +1,6 @@
 package es.karmadev.api.script.body;
 
+import es.karmadev.api.script.body.func.Function;
 import es.karmadev.api.script.exception.ScriptRuntimeException;
 import es.karmadev.api.script.exception.body.ScriptWorkException;
 
@@ -30,6 +31,35 @@ public class ScriptBody {
     }
 
     /**
+     * Find a function through all the
+     * imports. This method will return the first
+     * match
+     *
+     * @param funcName the function to call
+     * @param parameters the number of parameters
+     * @return the matching function
+     */
+    public Function findFunction(final String funcName, final int parameters) {
+        Function match = null;
+        for (Import imp : imports) {
+            for (Function func : imp.getFunctions()) {
+                if (func.getName().equals(funcName)) {
+                    int params = func.getParameters();
+                    if (func.isMinParameters()) {
+                        if (params <= parameters) {
+                            match = func;
+                        }
+                    } else {
+                        if (params == parameters) return func;
+                    }
+                }
+            }
+        }
+
+        return match;
+    }
+
+    /**
      * Get an import
      *
      * @param name the import name
@@ -37,6 +67,34 @@ public class ScriptBody {
      */
     public Import getImport(final String name) {
         return imports.stream().filter((imp) -> imp.getName().equals(name))
+                .findAny().orElse(null);
+    }
+
+    /**
+     * Get a method
+     *
+     * @param name the method name
+     * @return the method
+     */
+    public ScriptMethod getMethod(final String name, final Object... parameters) {
+        return methods.stream()
+                .filter((method) -> {
+                    if (method.getName().equals(name)) {
+                        if (method.getParameters() == parameters.length) return true;
+
+                        int count = 0;
+                        for (int i = 0; i < method.getParameters(); i++) {
+                            String nm = method.getParameter(i);
+                            if (nm.endsWith("::")) {
+                                if (count >= parameters.length) return true;
+                            }
+
+                            count++;
+                        }
+                    }
+
+                    return false;
+                })
                 .findAny().orElse(null);
     }
 

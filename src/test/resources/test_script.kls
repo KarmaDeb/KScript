@@ -1,35 +1,10 @@
 :schema 1
-#def [system]
 
 main() {
-    system#println('Hello world! ', 56)
+    println(5, 'This is a test message ', 'with multiple messages')
     exit 5
-
-    system#println('Unreachable statement')
-    /*while true:
-
-    ;
-
-    if condition:
-
-    or condition2:
-
-    ;
-
-    switch value:
-        on 1 ->
-            end
-        on 2 ->
-            end
-        on 3 ->
-            end
-        on any ->
-            end
-    ;*/
 }
 
-/*
-#def void printSomething(parameter) {
-
+println(level, message::) {
+    echo ['[WARNING-$0] $1', level, message]
 }
-*/
