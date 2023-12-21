@@ -29,3 +29,20 @@ main() {
   */
 }
 ```
+
+```
+:schema 1
+
+main() {
+  sayHello('This is a multi-parameter ', 'message')
+  printLine(false)
+}
+
+sayHello(message::) {
+  echo [message]
+}
+
+printLine(variable) {
+  echo I'll print literally this, without parsing "variable"
+}
+```
